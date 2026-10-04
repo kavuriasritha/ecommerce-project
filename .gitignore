@@ -1,0 +1,23 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+.env.*
+
+# React / Node
+node_modules/
+frontend/dist/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+backend/ecommerce.db
