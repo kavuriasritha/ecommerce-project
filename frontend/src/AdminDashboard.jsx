@@ -1,16 +1,14 @@
-
 import { useEffect, useState } from "react";
 
 function AdminDashboard() {
-  // =========================
-  // STATES
-  // =========================
-
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [orderDetails, setOrderDetails] = useState(null);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -18,13 +16,15 @@ function AdminDashboard() {
   const [stock, setStock] = useState("");
   const [category, setCategory] = useState("Electronics");
 
+  const API = "http://127.0.0.1:8000";
 
-  // =========================
+
+  // =====================================================
   // LOAD PRODUCTS
-  // =========================
+  // =====================================================
 
   function loadProducts() {
-    fetch("http://127.0.0.1:8000/products")
+    fetch(`${API}/products`)
       .then((response) => response.json())
       .then((data) => {
         console.log("Products:", data);
@@ -41,12 +41,12 @@ function AdminDashboard() {
   }
 
 
-  // =========================
+  // =====================================================
   // LOAD ORDERS
-  // =========================
+  // =====================================================
 
   function loadOrders() {
-    fetch("http://127.0.0.1:8000/admin/orders")
+    fetch(`${API}/admin/orders`)
       .then((response) => response.json())
       .then((data) => {
         console.log("Orders:", data);
@@ -63,9 +63,9 @@ function AdminDashboard() {
   }
 
 
-  // =========================
-  // LOAD DATA WHEN PAGE OPENS
-  // =========================
+  // =====================================================
+  // INITIAL LOAD
+  // =====================================================
 
   useEffect(() => {
     loadProducts();
@@ -73,9 +73,9 @@ function AdminDashboard() {
   }, []);
 
 
-  // =========================
-  // CLEAR FORM
-  // =========================
+  // =====================================================
+  // CLEAR PRODUCT FORM
+  // =====================================================
 
   function clearForm() {
     setName("");
@@ -87,9 +87,9 @@ function AdminDashboard() {
   }
 
 
-  // =========================
+  // =====================================================
   // ADD PRODUCT
-  // =========================
+  // =====================================================
 
   function addProduct() {
     if (!name || !description || !price || !stock) {
@@ -97,7 +97,7 @@ function AdminDashboard() {
       return;
     }
 
-    fetch("http://127.0.0.1:8000/products", {
+    fetch(`${API}/products`, {
       method: "POST",
 
       headers: {
@@ -124,7 +124,6 @@ function AdminDashboard() {
         alert("Product added successfully!");
 
         clearForm();
-
         setShowAddForm(false);
 
         loadProducts();
@@ -136,9 +135,9 @@ function AdminDashboard() {
   }
 
 
-  // =========================
+  // =====================================================
   // START EDIT
-  // =========================
+  // =====================================================
 
   function startEdit(product) {
     setEditingProduct(product);
@@ -153,9 +152,9 @@ function AdminDashboard() {
   }
 
 
-  // =========================
+  // =====================================================
   // UPDATE PRODUCT
-  // =========================
+  // =====================================================
 
   function updateProduct() {
     if (!name || !description || !price || !stock) {
@@ -168,24 +167,21 @@ function AdminDashboard() {
       return;
     }
 
-    fetch(
-      `http://127.0.0.1:8000/products/${editingProduct.id}`,
-      {
-        method: "PUT",
+    fetch(`${API}/products/${editingProduct.id}`, {
+      method: "PUT",
 
-        headers: {
-          "Content-Type": "application/json",
-        },
+      headers: {
+        "Content-Type": "application/json",
+      },
 
-        body: JSON.stringify({
-          name: name,
-          description: description,
-          price: Number(price),
-          stock: Number(stock),
-          category: category,
-        }),
-      }
-    )
+      body: JSON.stringify({
+        name: name,
+        description: description,
+        price: Number(price),
+        stock: Number(stock),
+        category: category,
+      }),
+    })
       .then((response) => response.json())
       .then((data) => {
         console.log("Updated product:", data);
@@ -198,7 +194,6 @@ function AdminDashboard() {
         alert("Product updated successfully!");
 
         clearForm();
-
         setShowAddForm(false);
 
         loadProducts();
@@ -210,9 +205,9 @@ function AdminDashboard() {
   }
 
 
-  // =========================
+  // =====================================================
   // DELETE PRODUCT
-  // =========================
+  // =====================================================
 
   function deleteProduct(id) {
     const confirmDelete = window.confirm(
@@ -223,12 +218,9 @@ function AdminDashboard() {
       return;
     }
 
-    fetch(
-      `http://127.0.0.1:8000/products/${id}`,
-      {
-        method: "DELETE",
-      }
-    )
+    fetch(`${API}/products/${id}`, {
+      method: "DELETE",
+    })
       .then((response) => response.json())
       .then((data) => {
         console.log("Delete response:", data);
@@ -249,9 +241,89 @@ function AdminDashboard() {
   }
 
 
-  // =========================
+  // =====================================================
+  // VIEW ORDER DETAILS
+  // =====================================================
+
+  function viewOrderDetails(orderId) {
+    fetch(`${API}/order-details/${orderId}`)
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Order details:", data);
+
+        if (data.message) {
+          alert(data.message);
+          return;
+        }
+
+        setSelectedOrder(orderId);
+        setOrderDetails(data);
+      })
+      .catch((error) => {
+        console.log("Order details error:", error);
+        alert("Could not load order details");
+      });
+  }
+
+
+  // =====================================================
+  // CLOSE ORDER DETAILS
+  // =====================================================
+
+  function closeOrderDetails() {
+    setSelectedOrder(null);
+    setOrderDetails(null);
+  }
+
+
+  // =====================================================
+  // UPDATE ORDER STATUS
+  // =====================================================
+
+  function updateOrderStatus(orderId, newStatus) {
+    fetch(`${API}/admin/orders/${orderId}/status`, {
+      method: "PUT",
+
+      headers: {
+        "Content-Type": "application/json",
+      },
+
+      body: JSON.stringify({
+        status: newStatus,
+      }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Status response:", data);
+
+        if (data.message === "Invalid order status") {
+          alert("Invalid order status");
+          return;
+        }
+
+        if (data.message === "Order not found") {
+          alert("Order not found");
+          return;
+        }
+
+        alert("Order status updated successfully!");
+
+        loadOrders();
+
+        if (selectedOrder === orderId) {
+          viewOrderDetails(orderId);
+        }
+      })
+      .catch((error) => {
+        console.log("Status update error:", error);
+        alert("Could not update order status");
+      });
+  }
+
+
+  // =====================================================
   // CANCEL FORM
-  // =========================
+  // =====================================================
 
   function cancelForm() {
     clearForm();
@@ -259,9 +331,9 @@ function AdminDashboard() {
   }
 
 
-  // =========================
+  // =====================================================
   // UI
-  // =========================
+  // =====================================================
 
   return (
     <div
@@ -275,9 +347,9 @@ function AdminDashboard() {
       }}
     >
 
-      {/* =========================
+      {/* =================================================
           HEADER
-      ========================= */}
+      ================================================= */}
 
       <div
         style={{
@@ -298,7 +370,6 @@ function AdminDashboard() {
             Manage your products and orders
           </p>
         </div>
-
 
         <button
           onClick={() => {
@@ -321,9 +392,9 @@ function AdminDashboard() {
       </div>
 
 
-      {/* =========================
-          ADD / EDIT FORM
-      ========================= */}
+      {/* =================================================
+          ADD / EDIT PRODUCT
+      ================================================= */}
 
       {showAddForm && (
         <div
@@ -341,16 +412,11 @@ function AdminDashboard() {
               : "➕ Add New Product"}
           </h2>
 
-
-          {/* NAME */}
-
           <input
             type="text"
             placeholder="Product name"
             value={name}
-            onChange={(e) =>
-              setName(e.target.value)
-            }
+            onChange={(e) => setName(e.target.value)}
             style={{
               display: "block",
               width: "100%",
@@ -360,15 +426,10 @@ function AdminDashboard() {
             }}
           />
 
-
-          {/* DESCRIPTION */}
-
           <textarea
             placeholder="Product description"
             value={description}
-            onChange={(e) =>
-              setDescription(e.target.value)
-            }
+            onChange={(e) => setDescription(e.target.value)}
             style={{
               display: "block",
               width: "100%",
@@ -379,16 +440,11 @@ function AdminDashboard() {
             }}
           />
 
-
-          {/* PRICE */}
-
           <input
             type="number"
             placeholder="Price"
             value={price}
-            onChange={(e) =>
-              setPrice(e.target.value)
-            }
+            onChange={(e) => setPrice(e.target.value)}
             style={{
               display: "block",
               width: "100%",
@@ -397,17 +453,12 @@ function AdminDashboard() {
               boxSizing: "border-box",
             }}
           />
-
-
-          {/* STOCK */}
 
           <input
             type="number"
             placeholder="Stock"
             value={stock}
-            onChange={(e) =>
-              setStock(e.target.value)
-            }
+            onChange={(e) => setStock(e.target.value)}
             style={{
               display: "block",
               width: "100%",
@@ -417,14 +468,9 @@ function AdminDashboard() {
             }}
           />
 
-
-          {/* CATEGORY */}
-
           <select
             value={category}
-            onChange={(e) =>
-              setCategory(e.target.value)
-            }
+            onChange={(e) => setCategory(e.target.value)}
             style={{
               display: "block",
               width: "100%",
@@ -456,9 +502,6 @@ function AdminDashboard() {
 
           </select>
 
-
-          {/* FORM BUTTONS */}
-
           <button
             onClick={
               editingProduct
@@ -480,7 +523,6 @@ function AdminDashboard() {
               : "Add Product"}
           </button>
 
-
           <button
             onClick={cancelForm}
             style={{
@@ -497,15 +539,11 @@ function AdminDashboard() {
       )}
 
 
-      {/* =========================
-          PRODUCTS SECTION
-      ========================= */}
+      {/* =================================================
+          PRODUCTS
+      ================================================= */}
 
-      <div
-        style={{
-          marginBottom: "40px",
-        }}
-      >
+      <div style={{ marginBottom: "40px" }}>
 
         <h2>
           📦 Products
@@ -514,7 +552,6 @@ function AdminDashboard() {
         <p>
           Total Products: {products.length}
         </p>
-
 
         {products.length === 0 ? (
 
@@ -557,8 +594,7 @@ function AdminDashboard() {
                   </p>
 
                   <p>
-                    Category:{" "}
-                    {product.category}
+                    Category: {product.category}
                   </p>
 
                   <p>
@@ -571,15 +607,10 @@ function AdminDashboard() {
 
                 </div>
 
-
                 <div>
 
-                  {/* EDIT */}
-
                   <button
-                    onClick={() =>
-                      startEdit(product)
-                    }
+                    onClick={() => startEdit(product)}
                     style={{
                       padding: "8px 15px",
                       backgroundColor: "#2563eb",
@@ -593,13 +624,8 @@ function AdminDashboard() {
                     ✏️ Edit
                   </button>
 
-
-                  {/* DELETE */}
-
                   <button
-                    onClick={() =>
-                      deleteProduct(product.id)
-                    }
+                    onClick={() => deleteProduct(product.id)}
                     style={{
                       padding: "8px 15px",
                       backgroundColor: "#dc2626",
@@ -625,9 +651,9 @@ function AdminDashboard() {
       </div>
 
 
-      {/* =========================
-          ORDERS SECTION
-      ========================= */}
+      {/* =================================================
+          ORDERS
+      ================================================= */}
 
       <div>
 
@@ -638,7 +664,6 @@ function AdminDashboard() {
         <p>
           Total Orders: {orders.length}
         </p>
-
 
         {orders.length === 0 ? (
 
@@ -681,27 +706,69 @@ function AdminDashboard() {
                   </p>
 
                   <p>
-                    Total Amount: ₹
-                    {order.total_amount}
+                    Total Amount: ₹{order.total_amount}
                   </p>
 
                   <p>
-                    Status: {order.status}
+                    Status: <strong>{order.status}</strong>
                   </p>
 
                 </div>
 
 
-                <div
-                  style={{
-                    padding: "8px 15px",
-                    backgroundColor: "#dcfce7",
-                    color: "#166534",
-                    borderRadius: "20px",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {order.status}
+                <div>
+
+                  <button
+                    onClick={() =>
+                      viewOrderDetails(order.id)
+                    }
+                    style={{
+                      padding: "9px 15px",
+                      backgroundColor: "#2563eb",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      marginRight: "10px",
+                    }}
+                  >
+                    👁️ View Details
+                  </button>
+
+
+                  <select
+                    value={order.status}
+                    onChange={(e) =>
+                      updateOrderStatus(
+                        order.id,
+                        e.target.value
+                      )
+                    }
+                    style={{
+                      padding: "9px",
+                      borderRadius: "6px",
+                      border: "1px solid #ccc",
+                    }}
+                  >
+
+                    <option value="Placed">
+                      Placed
+                    </option>
+
+                    <option value="Processing">
+                      Processing
+                    </option>
+
+                    <option value="Shipped">
+                      Shipped
+                    </option>
+
+                    <option value="Delivered">
+                      Delivered
+                    </option>
+
+                  </select>
+
                 </div>
 
               </div>
@@ -714,9 +781,132 @@ function AdminDashboard() {
 
       </div>
 
+
+      {/* =================================================
+          ORDER DETAILS
+      ================================================= */}
+
+      {orderDetails && (
+
+        <div
+          style={{
+            marginTop: "30px",
+            padding: "25px",
+            backgroundColor: "#f8fafc",
+            borderRadius: "12px",
+            border: "1px solid #ddd",
+          }}
+        >
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+
+            <h2>
+              🧾 Order Details
+            </h2>
+
+            <button
+              onClick={closeOrderDetails}
+              style={{
+                padding: "8px 15px",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+              }}
+            >
+              ✕ Close
+            </button>
+
+          </div>
+
+
+          <p>
+            <strong>Order ID:</strong>{" "}
+            {orderDetails.order_id}
+          </p>
+
+          <p>
+            <strong>User ID:</strong>{" "}
+            {orderDetails.user_id}
+          </p>
+
+          <p>
+            <strong>Status:</strong>{" "}
+            {orderDetails.status}
+          </p>
+
+          <p>
+            <strong>Total:</strong>{" "}
+            ₹{orderDetails.total_amount}
+          </p>
+
+
+          <h3>
+            Products in this order
+          </h3>
+
+
+          {orderDetails.items &&
+          orderDetails.items.length > 0 ? (
+
+            orderDetails.items.map((item, index) => (
+
+              <div
+                key={index}
+                style={{
+                  padding: "15px",
+                  marginBottom: "10px",
+                  backgroundColor: "white",
+                  borderRadius: "8px",
+                  border: "1px solid #ddd",
+                }}
+              >
+
+                <p>
+                  <strong>
+                    {item.product_name}
+                  </strong>
+                </p>
+
+                <p>
+                  Product ID: {item.product_id}
+                </p>
+
+                <p>
+                  Quantity: {item.quantity}
+                </p>
+
+                <p>
+                  Price: ₹{item.price}
+                </p>
+
+                <p>
+                  Subtotal: ₹{item.subtotal}
+                </p>
+
+              </div>
+
+            ))
+
+          ) : (
+
+            <p>
+              No products found in this order.
+            </p>
+
+          )}
+
+        </div>
+
+      )}
+
     </div>
   );
 }
 
 export default AdminDashboard;
-

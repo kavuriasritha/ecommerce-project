@@ -1,11 +1,12 @@
+
 import { useEffect, useState } from "react";
 import "./App.css";
 import AdminDashboard from "./AdminDashboard";
 
 function App() {
-  // ==============================
+  // =====================================================
   // STATES
-  // ==============================
+  // =====================================================
 
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
@@ -27,61 +28,121 @@ function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
 
+  // =====================================================
+  // API URL
+  // =====================================================
 
-  // ==============================
-  // GET PRODUCTS
-  // ==============================
+  const API_URL = "http://127.0.0.1:8000";
+
+  // =====================================================
+  // PRODUCT IMAGES
+  // =====================================================
+
+  function getProductImage(product) {
+    const productName = (product?.name || "").toLowerCase();
+
+    if (productName.includes("headphone")) {
+      return "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80";
+    }
+
+    if (productName.includes("mouse")) {
+      return "https://images.unsplash.com/photo-1527814050087-3793815479db?auto=format&fit=crop&w=600&q=80";
+    }
+
+    if (productName.includes("keyboard")) {
+      return "https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=600&q=80";
+    }
+
+    if (productName.includes("speaker")) {
+      return "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?auto=format&fit=crop&w=600&q=80";
+    }
+
+    if (productName.includes("watch")) {
+      return "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80";
+    }
+
+    if (productName.includes("backpack")) {
+      return "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=600&q=80";
+    }
+
+    return "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80";
+  }
+
+  // =====================================================
+  // LOAD PRODUCTS
+  // =====================================================
+
+  async function loadProducts() {
+    try {
+      const response = await fetch(`${API_URL}/products`);
+
+      if (!response.ok) {
+        throw new Error("Could not load products");
+      }
+
+      const data = await response.json();
+
+      console.log("Products:", data);
+
+      if (Array.isArray(data)) {
+        setProducts(data);
+      } else {
+        setProducts([]);
+      }
+    } catch (error) {
+      console.log("Product error:", error);
+    }
+  }
+
+  // =====================================================
+  // LOAD PRODUCTS WHEN APP STARTS
+  // =====================================================
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/products")
-      .then((response) => response.json())
-      .then((data) => {
-        setProducts(data);
-      })
-      .catch((error) => {
-        console.log("Product error:", error);
-      });
+    loadProducts();
   }, []);
 
-
-  // ==============================
+  // =====================================================
   // CATEGORIES
-  // ==============================
+  // =====================================================
 
   const categories = [
     "All",
     ...new Set(
-      products.map((product) => product.category)
+      products
+        .map((product) => product.category)
+        .filter(Boolean)
     ),
   ];
 
-
-  // ==============================
+  // =====================================================
   // FILTER PRODUCTS
-  // ==============================
+  // =====================================================
 
-  const filteredProducts = products.filter(
-    (product) => {
-      const matchesSearch =
-        product.name
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        product.description
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase());
+  const filteredProducts = products.filter((product) => {
+    const productName =
+      product?.name?.toLowerCase() || "";
 
-      const matchesCategory =
-        selectedCategory === "All" ||
-        product.category === selectedCategory;
+    const productDescription =
+      product?.description?.toLowerCase() || "";
 
-      return matchesSearch && matchesCategory;
-    }
-  );
+    const search =
+      searchTerm.toLowerCase();
 
+    const matchesSearch =
+      productName.includes(search) ||
+      productDescription.includes(search);
 
-  // ==============================
+    const matchesCategory =
+      selectedCategory === "All" ||
+      product.category === selectedCategory;
+
+    return matchesSearch && matchesCategory;
+  });
+
+  // =====================================================
   // OPEN PRODUCT DETAILS
-  // ==============================
+  // =====================================================
 
   function openProduct(product) {
     setSelectedProduct(product);
@@ -93,22 +154,20 @@ function App() {
     setShowAdmin(false);
   }
 
-
-  // ==============================
+  // =====================================================
   // CLOSE PRODUCT DETAILS
-  // ==============================
+  // =====================================================
 
   function closeProduct() {
     setSelectedProduct(null);
     setProductQuantity(1);
   }
 
-
-  // ==============================
+  // =====================================================
   // ADD TO CART
-  // ==============================
+  // =====================================================
 
-  function addToCart(productId, quantity = 1) {
+  async function addToCart(productId, quantity = 1) {
     if (!loggedInUser) {
       alert("Please login first!");
 
@@ -121,43 +180,46 @@ function App() {
       return;
     }
 
-    fetch("http://127.0.0.1:8000/cart", {
-      method: "POST",
+    try {
+      const response = await fetch(`${API_URL}/cart`, {
+        method: "POST",
 
-      headers: {
-        "Content-Type": "application/json",
-      },
+        headers: {
+          "Content-Type": "application/json",
+        },
 
-      body: JSON.stringify({
-        user_id: loggedInUser.user_id,
-        product_id: productId,
-        quantity: quantity,
-      }),
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.detail) {
-          alert(data.detail);
-          return;
-        }
-
-        alert("Product added to cart!");
-
-        setSelectedProduct(null);
-        setProductQuantity(1);
-      })
-      .catch((error) => {
-        console.log("Cart error:", error);
-        alert("Could not add product to cart");
+        body: JSON.stringify({
+          user_id: loggedInUser.user_id,
+          product_id: productId,
+          quantity: quantity,
+        }),
       });
+
+      const data = await response.json();
+
+      console.log("Add cart response:", data);
+
+      if (!response.ok || data.detail) {
+        alert(data.detail || "Could not add product to cart");
+        return;
+      }
+
+      alert("Product added to cart!");
+
+      setSelectedProduct(null);
+      setProductQuantity(1);
+
+    } catch (error) {
+      console.log("Cart error:", error);
+      alert("Could not add product to cart");
+    }
   }
 
-
-  // ==============================
+  // =====================================================
   // GET CART
-  // ==============================
+  // =====================================================
 
-  function getCart() {
+  async function getCart() {
     if (!loggedInUser) {
       alert("Please login first!");
 
@@ -169,100 +231,117 @@ function App() {
       return;
     }
 
-    fetch(
-      `http://127.0.0.1:8000/cart/${loggedInUser.user_id}`
-    )
-      .then((response) => response.json())
-      .then((data) => {
-        setCart(data);
+    try {
+      const response = await fetch(
+        `${API_URL}/cart/${loggedInUser.user_id}`
+      );
 
-        setShowCart(true);
-        setShowRegister(false);
-        setShowLogin(false);
-        setShowAdmin(false);
-        setSelectedProduct(null);
-      })
-      .catch((error) => {
-        console.log("Cart error:", error);
-        alert("Could not load cart");
-      });
+      if (!response.ok) {
+        throw new Error("Could not load cart");
+      }
+
+      const data = await response.json();
+
+      console.log("Cart:", data);
+
+      if (Array.isArray(data)) {
+        setCart(data);
+      } else {
+        setCart([]);
+      }
+
+      setShowCart(true);
+      setShowRegister(false);
+      setShowLogin(false);
+      setShowAdmin(false);
+      setSelectedProduct(null);
+
+    } catch (error) {
+      console.log("Cart error:", error);
+      alert("Could not load cart");
+    }
   }
 
-
-  // ==============================
+  // =====================================================
   // UPDATE CART QUANTITY
-  // ==============================
+  // =====================================================
 
-  function updateQuantity(cartId, newQuantity) {
+  async function updateQuantity(cartId, newQuantity) {
     if (newQuantity < 1) {
       removeFromCart(cartId);
       return;
     }
 
-    fetch(
-      `http://127.0.0.1:8000/cart/${cartId}`,
-      {
-        method: "PUT",
+    try {
+      const response = await fetch(
+        `${API_URL}/cart/${cartId}`,
+        {
+          method: "PUT",
 
-        headers: {
-          "Content-Type": "application/json",
-        },
+          headers: {
+            "Content-Type": "application/json",
+          },
 
-        body: JSON.stringify({
-          quantity: newQuantity,
-        }),
-      }
-    )
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.detail) {
-          alert(data.detail);
-          return;
+          body: JSON.stringify({
+            quantity: newQuantity,
+          }),
         }
+      );
 
-        getCart();
-      })
-      .catch((error) => {
-        console.log("Update cart error:", error);
-        alert("Could not update quantity");
-      });
+      const data = await response.json();
+
+      console.log("Update cart response:", data);
+
+      if (!response.ok || data.detail) {
+        alert(data.detail || "Could not update quantity");
+        return;
+      }
+
+      getCart();
+
+    } catch (error) {
+      console.log("Update cart error:", error);
+      alert("Could not update quantity");
+    }
   }
 
-
-  // ==============================
+  // =====================================================
   // REMOVE FROM CART
-  // ==============================
+  // =====================================================
 
-  function removeFromCart(cartId) {
-    fetch(
-      `http://127.0.0.1:8000/cart/${cartId}`,
-      {
-        method: "DELETE",
-      }
-    )
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.detail) {
-          alert(data.detail);
-          return;
+  async function removeFromCart(cartId) {
+    try {
+      const response = await fetch(
+        `${API_URL}/cart/${cartId}`,
+        {
+          method: "DELETE",
         }
+      );
 
-        alert("Product removed from cart!");
+      const data = await response.json();
 
-        getCart();
-      })
-      .catch((error) => {
-        console.log("Remove cart error:", error);
-        alert("Could not remove product");
-      });
+      console.log("Remove cart response:", data);
+
+      if (!response.ok || data.detail) {
+        alert(data.detail || "Could not remove product");
+        return;
+      }
+
+      alert("Product removed from cart!");
+
+      getCart();
+
+    } catch (error) {
+      console.log("Remove cart error:", error);
+      alert("Could not remove product");
+    }
   }
 
-
-  // ==============================
+  // =====================================================
   // PLACE ORDER
-  // ==============================
+  // =====================================================
 
-  function placeOrder() {
+  async function placeOrder() {
     if (!loggedInUser) {
       alert("Please login first!");
       return;
@@ -273,147 +352,181 @@ function App() {
       return;
     }
 
-    fetch(
-      `http://127.0.0.1:8000/orders/${loggedInUser.user_id}`,
-      {
-        method: "POST",
+    try {
+      const response = await fetch(
+        `${API_URL}/orders/${loggedInUser.user_id}`,
+        {
+          method: "POST",
+        }
+      );
+
+      const data = await response.json();
+
+      console.log("Order response:", data);
+
+      if (!response.ok || data.detail) {
+        alert(data.detail || "Could not place order");
+        return;
       }
-    )
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.detail) {
-          alert(data.detail);
-          return;
-        }
 
-        if (data.message === "Cart is empty") {
-          alert("Your cart is empty!");
-          return;
-        }
+      if (data.message === "Cart is empty") {
+        alert("Your cart is empty!");
+        return;
+      }
 
-        alert(
-          "Order placed successfully!\n" +
-          "Order ID: " +
-          data.order_id +
-          "\nTotal: ₹" +
-          data.total_amount
-        );
+      alert(
+        "Order placed successfully!\n\n" +
+        "Order ID: " +
+        data.order_id +
+        "\n" +
+        "Total: ₹" +
+        Number(data.total_amount || 0).toFixed(2)
+      );
 
-        setCart([]);
-        setShowCart(false);
-      })
-      .catch((error) => {
-        console.log("Order error:", error);
-        alert("Could not place order");
-      });
+      setCart([]);
+      setShowCart(false);
+
+    } catch (error) {
+      console.log("Order error:", error);
+      alert("Could not place order");
+    }
   }
 
-
-  // ==============================
+  // =====================================================
   // REGISTER
-  // ==============================
+  // =====================================================
 
-  function registerUser() {
+  async function registerUser() {
     if (!name || !email || !password) {
       alert("Please fill all fields");
       return;
     }
 
-    fetch("http://127.0.0.1:8000/register", {
-      method: "POST",
+    try {
+      const response = await fetch(
+        `${API_URL}/register`,
+        {
+          method: "POST",
 
-      headers: {
-        "Content-Type": "application/json",
-      },
+          headers: {
+            "Content-Type": "application/json",
+          },
 
-      body: JSON.stringify({
-        name: name,
-        email: email,
-        password: password,
-      }),
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.user_id) {
-          alert("Registration successful!");
-
-          setName("");
-          setEmail("");
-          setPassword("");
-
-          setShowRegister(false);
-          setShowLogin(true);
-        } else {
-          alert(
-            data.message ||
-            data.detail ||
-            "Registration failed"
-          );
+          body: JSON.stringify({
+            name: name,
+            email: email,
+            password: password,
+          }),
         }
-      })
-      .catch((error) => {
-        console.log("Registration error:", error);
-        alert("Could not register user");
-      });
+      );
+
+      const data = await response.json();
+
+      console.log("Register response:", data);
+
+      if (!response.ok || data.detail) {
+        alert(
+          data.detail ||
+          data.message ||
+          "Registration failed"
+        );
+        return;
+      }
+
+      if (data.user_id) {
+        alert("Registration successful!");
+
+        setName("");
+        setEmail("");
+        setPassword("");
+
+        setShowRegister(false);
+        setShowLogin(true);
+      } else {
+        alert(
+          data.message ||
+          data.detail ||
+          "Registration failed"
+        );
+      }
+
+    } catch (error) {
+      console.log("Registration error:", error);
+      alert("Could not register user");
+    }
   }
 
-
-  // ==============================
+  // =====================================================
   // LOGIN
-  // ==============================
+  // =====================================================
 
-  function loginUser() {
+  async function loginUser() {
     if (!email || !password) {
       alert("Please enter email and password");
       return;
     }
 
-    fetch("http://127.0.0.1:8000/login", {
-      method: "POST",
+    try {
+      const response = await fetch(
+        `${API_URL}/login`,
+        {
+          method: "POST",
 
-      headers: {
-        "Content-Type": "application/json",
-      },
+          headers: {
+            "Content-Type": "application/json",
+          },
 
-      body: JSON.stringify({
-        email: email,
-        password: password,
-      }),
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        console.log("Login response:", data);
-
-        if (data.user_id) {
-          alert("Login successful!");
-
-          setLoggedInUser(data);
-
-          setEmail("");
-          setPassword("");
-
-          setShowLogin(false);
-          setShowRegister(false);
-          setShowCart(false);
-          setShowAdmin(false);
-        } else {
-          alert(
-            data.message ||
-            data.detail ||
-            "Login failed"
-          );
+          body: JSON.stringify({
+            email: email,
+            password: password,
+          }),
         }
-      })
-      .catch((error) => {
-        console.log("Login error:", error);
-        alert("Could not login");
-      });
+      );
+
+      const data = await response.json();
+
+      console.log("Login response:", data);
+
+      if (!response.ok || data.detail) {
+        alert(
+          data.detail ||
+          data.message ||
+          "Login failed"
+        );
+        return;
+      }
+
+      if (data.user_id) {
+        alert("Login successful!");
+
+        setLoggedInUser(data);
+
+        setEmail("");
+        setPassword("");
+
+        setShowLogin(false);
+        setShowRegister(false);
+        setShowCart(false);
+        setShowAdmin(false);
+        setSelectedProduct(null);
+
+      } else {
+        alert(
+          data.message ||
+          data.detail ||
+          "Login failed"
+        );
+      }
+
+    } catch (error) {
+      console.log("Login error:", error);
+      alert("Could not login");
+    }
   }
 
-
-  // ==============================
+  // =====================================================
   // LOGOUT
-  // ==============================
+  // =====================================================
 
   function logoutUser() {
     setLoggedInUser(null);
@@ -428,10 +541,9 @@ function App() {
     alert("Logged out successfully!");
   }
 
-
-  // ==============================
+  // =====================================================
   // OPEN ADMIN
-  // ==============================
+  // =====================================================
 
   function openAdmin() {
     setShowAdmin(true);
@@ -442,28 +554,42 @@ function App() {
     setSelectedProduct(null);
   }
 
+  // =====================================================
+  // GO HOME
+  // =====================================================
 
-  // ==============================
+  function goHome() {
+    setShowAdmin(false);
+    setShowCart(false);
+    setShowRegister(false);
+    setShowLogin(false);
+    setSelectedProduct(null);
+  }
+
+  // =====================================================
   // CART TOTAL
-  // ==============================
+  // =====================================================
 
   const cartTotal = cart.reduce(
-    (total, item) =>
-      total + item.price * item.quantity,
+    (total, item) => {
+      const price = Number(item?.price || 0);
+      const quantity = Number(item?.quantity || 0);
+
+      return total + price * quantity;
+    },
     0
   );
 
-
-  // ==============================
+  // =====================================================
   // MAIN UI
-  // ==============================
+  // =====================================================
 
   return (
     <div className="app">
 
-      {/* ==========================
+      {/* =================================================
           NAVBAR
-      =========================== */}
+      ================================================= */}
 
       <nav className="navbar">
 
@@ -471,23 +597,13 @@ function App() {
           🛒 My Store
         </h2>
 
-
         <div className="nav-links">
 
           {/* HOME */}
 
-          <button
-            onClick={() => {
-              setShowAdmin(false);
-              setShowCart(false);
-              setShowRegister(false);
-              setShowLogin(false);
-              setSelectedProduct(null);
-            }}
-          >
+          <button onClick={goHome}>
             Home
           </button>
-
 
           {/* LOGIN */}
 
@@ -505,7 +621,6 @@ function App() {
             </button>
           )}
 
-
           {/* REGISTER */}
 
           {!loggedInUser && (
@@ -522,20 +637,17 @@ function App() {
             </button>
           )}
 
-
           {/* CART */}
 
           <button onClick={getCart}>
             🛒 Cart
           </button>
 
-
           {/* ADMIN */}
 
           <button onClick={openAdmin}>
             ⚙️ Admin
           </button>
-
 
           {/* LOGOUT */}
 
@@ -546,39 +658,33 @@ function App() {
           )}
 
         </div>
-
       </nav>
 
-
-      {/* ==========================
+      {/* =================================================
           USER MESSAGE
-      =========================== */}
+      ================================================= */}
 
       {loggedInUser && (
         <div className="user-message">
-
           Welcome,{" "}
-
           {loggedInUser.name ||
             loggedInUser.email ||
-            "User"}!
-
+            "User"}
+          !
         </div>
       )}
 
-
-      {/* ==========================
+      {/* =================================================
           ADMIN DASHBOARD
-      =========================== */}
+      ================================================= */}
 
       {showAdmin && (
         <AdminDashboard />
       )}
 
-
-      {/* ==========================
+      {/* =================================================
           REGISTER
-      =========================== */}
+      ================================================= */}
 
       {showRegister && !showAdmin && (
         <section className="register-section">
@@ -586,7 +692,6 @@ function App() {
           <h1>
             Create Account
           </h1>
-
 
           <input
             type="text"
@@ -597,7 +702,6 @@ function App() {
             }
           />
 
-
           <input
             type="email"
             placeholder="Enter your email"
@@ -607,7 +711,6 @@ function App() {
             }
           />
 
-
           <input
             type="password"
             placeholder="Enter your password"
@@ -616,7 +719,6 @@ function App() {
               setPassword(e.target.value)
             }
           />
-
 
           <button
             className="register-button"
@@ -625,12 +727,12 @@ function App() {
             Create Account
           </button>
 
-
           <button
             className="back-button"
-            onClick={() =>
-              setShowRegister(false)
-            }
+            onClick={() => {
+              setShowRegister(false);
+              setShowLogin(false);
+            }}
           >
             ← Back
           </button>
@@ -638,10 +740,9 @@ function App() {
         </section>
       )}
 
-
-      {/* ==========================
+      {/* =================================================
           LOGIN
-      =========================== */}
+      ================================================= */}
 
       {showLogin && !showAdmin && (
         <section className="register-section">
@@ -649,7 +750,6 @@ function App() {
           <h1>
             Login
           </h1>
-
 
           <input
             type="email"
@@ -660,7 +760,6 @@ function App() {
             }
           />
 
-
           <input
             type="password"
             placeholder="Enter your password"
@@ -670,7 +769,6 @@ function App() {
             }
           />
 
-
           <button
             className="register-button"
             onClick={loginUser}
@@ -678,12 +776,11 @@ function App() {
             Login
           </button>
 
-
           <button
             className="back-button"
-            onClick={() =>
-              setShowLogin(false)
-            }
+            onClick={() => {
+              setShowLogin(false);
+            }}
           >
             ← Back
           </button>
@@ -691,139 +788,122 @@ function App() {
         </section>
       )}
 
-
-      {/* ==========================
+      {/* =================================================
           PRODUCT DETAILS
-      =========================== */}
+      ================================================= */}
 
-      {selectedProduct &&
-        !showAdmin && (
-          <section className="product-details">
+      {selectedProduct && !showAdmin && (
+        <section className="product-details">
 
-            <button
-              className="back-button"
-              onClick={closeProduct}
-            >
-              ← Back to Products
-            </button>
+          <button
+            className="back-button"
+            onClick={closeProduct}
+          >
+            ← Back to Products
+          </button>
 
+          <div className="product-details-card">
 
-            <div className="product-details-card">
+            <div className="product-details-image">
 
-              <div className="product-details-image">
-
-                {selectedProduct.category ===
-                "Electronics"
-                  ? "🎧"
-                  : selectedProduct.category ===
-                    "Wearables"
-                    ? "⌚"
-                    : "🛍️"}
-
-              </div>
-
-
-              <div className="product-details-info">
-
-                <p className="category">
-                  {selectedProduct.category}
-                </p>
-
-
-                <h1>
-                  {selectedProduct.name}
-                </h1>
-
-
-                <p className="details-description">
-                  {selectedProduct.description}
-                </p>
-
-
-                <p className="details-price">
-                  ₹{selectedProduct.price}
-                </p>
-
-
-                <p className="details-stock">
-
-                  {selectedProduct.stock > 0
-                    ? `In Stock: ${selectedProduct.stock}`
-                    : "Out of Stock"}
-
-                </p>
-
-
-                {selectedProduct.stock > 0 && (
-                  <div className="details-quantity">
-
-                    <span>
-                      Quantity:
-                    </span>
-
-
-                    <button
-                      onClick={() =>
-                        setProductQuantity(
-                          Math.max(
-                            1,
-                            productQuantity - 1
-                          )
-                        )
-                      }
-                    >
-                      −
-                    </button>
-
-
-                    <strong>
-                      {productQuantity}
-                    </strong>
-
-
-                    <button
-                      onClick={() =>
-                        setProductQuantity(
-                          Math.min(
-                            selectedProduct.stock,
-                            productQuantity + 1
-                          )
-                        )
-                      }
-                    >
-                      +
-                    </button>
-
-                  </div>
-                )}
-
-
-                <button
-                  className="details-cart-button"
-                  disabled={
-                    selectedProduct.stock === 0
-                  }
-                  onClick={() =>
-                    addToCart(
-                      selectedProduct.id,
-                      productQuantity
-                    )
-                  }
-                >
-                  🛒 Add to Cart
-                </button>
-
-              </div>
+              <img
+                src={getProductImage(selectedProduct)}
+                alt={selectedProduct.name}
+              />
 
             </div>
 
-          </section>
-        )}
+            <div className="product-details-info">
 
+              <p className="category">
+                {selectedProduct.category}
+              </p>
 
-      {/* ==========================
+              <h1>
+                {selectedProduct.name}
+              </h1>
+
+              <p className="details-description">
+                {selectedProduct.description}
+              </p>
+
+              <p className="details-price">
+                ₹{Number(selectedProduct.price || 0)}
+              </p>
+
+              <p className="details-stock">
+
+                {Number(selectedProduct.stock || 0) > 0
+                  ? `In Stock: ${selectedProduct.stock}`
+                  : "Out of Stock"}
+
+              </p>
+
+              {Number(selectedProduct.stock || 0) > 0 && (
+                <div className="details-quantity">
+
+                  <span>
+                    Quantity:
+                  </span>
+
+                  <button
+                    onClick={() =>
+                      setProductQuantity(
+                        Math.max(
+                          1,
+                          productQuantity - 1
+                        )
+                      )
+                    }
+                  >
+                    −
+                  </button>
+
+                  <strong>
+                    {productQuantity}
+                  </strong>
+
+                  <button
+                    onClick={() =>
+                      setProductQuantity(
+                        Math.min(
+                          Number(selectedProduct.stock),
+                          productQuantity + 1
+                        )
+                      )
+                    }
+                  >
+                    +
+                  </button>
+
+                </div>
+              )}
+
+              <button
+                className="details-cart-button"
+                disabled={
+                  Number(selectedProduct.stock || 0) === 0
+                }
+                onClick={() =>
+                  addToCart(
+                    selectedProduct.id,
+                    productQuantity
+                  )
+                }
+              >
+                🛒 Add to Cart
+              </button>
+
+            </div>
+
+          </div>
+
+        </section>
+      )}
+
+      {/* =================================================
           CART
-      =========================== */}
+      ================================================= */}
 
       {showCart && !showAdmin && (
         <section className="cart-section">
@@ -832,7 +912,6 @@ function App() {
             🛒 My Cart
           </h1>
 
-
           {cart.length === 0 ? (
 
             <div>
@@ -840,7 +919,6 @@ function App() {
               <p>
                 Your cart is empty.
               </p>
-
 
               <button
                 className="back-button"
@@ -857,89 +935,92 @@ function App() {
 
             <div>
 
-              {cart.map((item) => (
+              {cart.map((item) => {
 
-                <div
-                  className="cart-item"
-                  key={item.id}
-                >
+                const price = Number(
+                  item?.price || 0
+                );
 
-                  <div>
+                const quantity = Number(
+                  item?.quantity || 0
+                );
 
-                    <h3>
-                      {item.product_name}
-                    </h3>
+                const productName =
+                  item?.product_name ||
+                  item?.name ||
+                  "Product";
 
+                return (
+                  <div
+                    className="cart-item"
+                    key={item.id}
+                  >
+
+                    <div>
+
+                      <h3>
+                        {productName}
+                      </h3>
+
+                      <p>
+                        Price: ₹{price}
+                      </p>
+
+                    </div>
+
+                    <div className="quantity-controls">
+
+                      <button
+                        onClick={() =>
+                          updateQuantity(
+                            item.id,
+                            quantity - 1
+                          )
+                        }
+                      >
+                        −
+                      </button>
+
+                      <span>
+                        {quantity}
+                      </span>
+
+                      <button
+                        onClick={() =>
+                          updateQuantity(
+                            item.id,
+                            quantity + 1
+                          )
+                        }
+                      >
+                        +
+                      </button>
+
+                    </div>
 
                     <p>
-                      Price: ₹{item.price}
+                      Subtotal: ₹
+                      {(price * quantity).toFixed(2)}
                     </p>
 
-                  </div>
-
-
-                  <div className="quantity-controls">
-
                     <button
+                      className="remove-button"
                       onClick={() =>
-                        updateQuantity(
-                          item.id,
-                          item.quantity - 1
-                        )
+                        removeFromCart(item.id)
                       }
                     >
-                      −
-                    </button>
-
-
-                    <span>
-                      {item.quantity}
-                    </span>
-
-
-                    <button
-                      onClick={() =>
-                        updateQuantity(
-                          item.id,
-                          item.quantity + 1
-                        )
-                      }
-                    >
-                      +
+                      🗑️ Remove
                     </button>
 
                   </div>
-
-
-                  <p>
-
-                    Subtotal: ₹
-                    {item.price *
-                      item.quantity}
-
-                  </p>
-
-
-                  <button
-                    className="remove-button"
-                    onClick={() =>
-                      removeFromCart(item.id)
-                    }
-                  >
-                    🗑️ Remove
-                  </button>
-
-                </div>
-
-              ))}
-
+                );
+              })}
 
               <div className="cart-total">
 
                 <h2>
-                  Total: ₹{cartTotal}
+                  Total: ₹{cartTotal.toFixed(2)}
                 </h2>
-
 
                 <button
                   className="order-button"
@@ -951,9 +1032,7 @@ function App() {
               </div>
 
             </div>
-
           )}
-
 
           {cart.length > 0 && (
             <button
@@ -969,10 +1048,9 @@ function App() {
         </section>
       )}
 
-
-      {/* ==========================
+      {/* =================================================
           HOME / PRODUCTS
-      =========================== */}
+      ================================================= */}
 
       {!showAdmin &&
         !showCart &&
@@ -997,7 +1075,6 @@ function App() {
 
             </section>
 
-
             {/* PRODUCTS */}
 
             <section className="products-section">
@@ -1006,6 +1083,9 @@ function App() {
                 Our Products
               </h2>
 
+              <p>
+                Total Products: {products.length}
+              </p>
 
               {/* SEARCH + FILTER */}
 
@@ -1021,7 +1101,6 @@ function App() {
                     )
                   }
                 />
-
 
                 <select
                   value={selectedCategory}
@@ -1047,7 +1126,6 @@ function App() {
 
               </div>
 
-
               {/* PRODUCT GRID */}
 
               <div className="product-grid">
@@ -1060,6 +1138,8 @@ function App() {
                       key={product.id}
                     >
 
+                      {/* PRODUCT IMAGE */}
+
                       <div
                         className="product-image"
                         onClick={() =>
@@ -1067,42 +1147,36 @@ function App() {
                         }
                       >
 
-                        {product.category ===
-                        "Electronics"
-                          ? "🎧"
-                          : product.category ===
-                            "Wearables"
-                            ? "⌚"
-                            : "🛍️"}
+                        <img
+                          src={getProductImage(product)}
+                          alt={product.name}
+                        />
 
                       </div>
-
 
                       <p className="category">
                         {product.category}
                       </p>
 
-
                       <h3>
                         {product.name}
                       </h3>
-
 
                       <p className="description">
                         {product.description}
                       </p>
 
-
                       <p className="price">
-                        ₹{product.price}
+                        ₹{Number(product.price || 0)}
                       </p>
-
 
                       <p className="stock">
-                        Stock available:{" "}
-                        {product.stock}
-                      </p>
 
+                        {Number(product.stock || 0) > 0
+                          ? `Stock available: ${product.stock}`
+                          : "Out of Stock"}
+
+                      </p>
 
                       <button
                         className="cart-button"
@@ -1118,14 +1192,10 @@ function App() {
                   )
                 )}
 
-
-                {filteredProducts.length ===
-                  0 && (
-
+                {filteredProducts.length === 0 && (
                   <p className="no-products">
                     No products found.
                   </p>
-
                 )}
 
               </div>
@@ -1140,3 +1210,4 @@ function App() {
 }
 
 export default App;
+

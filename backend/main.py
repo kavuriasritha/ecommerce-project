@@ -1,470 +1,1066 @@
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import engine, Base, SessionLocal
+from pydantic import BaseModel
+
+from database import Base, engine, SessionLocal
+
 import models
 import product_models
 import cart_models
 import order_models
-from schemas import UserCreate, UserLogin, ProductCreate, ProductUpdate, CartItemCreate, CartUpdate
-import bcrypt
-from fastapi import FastAPI, Depends
-from fastapi.middleware.cors import CORSMiddleware
 
 
-app = FastAPI()
+# =========================================================
+# CREATE DATABASE TABLES
+# =========================================================
+
+Base.metadata.create_all(bind=engine)
+
+
+# =========================================================
+# APP
+# =========================================================
+
+app = FastAPI(
+    title="My E-Commerce API",
+    description="E-Commerce Backend API",
+    version="1.0"
+)
+
+
+# =========================================================
+# CORS
+# =========================================================
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+    ],
+
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
 
+# =========================================================
+# DATABASE CONNECTION
+# =========================================================
 
-# Database connection
 def get_db():
     db = SessionLocal()
+
     try:
         yield db
+
     finally:
         db.close()
 
 
-# Home API
+# =========================================================
+# REQUEST SCHEMAS
+# =========================================================
+
+class UserCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class ProductCreate(BaseModel):
+    name: str
+    description: str
+    price: float
+    stock: int
+    category: str
+
+
+class CartCreate(BaseModel):
+    user_id: int
+    product_id: int
+    quantity: int
+
+
+class CartUpdate(BaseModel):
+    quantity: int
+
+
+class OrderStatusUpdate(BaseModel):
+    status: str
+
+
+# =========================================================
+# ROOT
+# =========================================================
+
 @app.get("/")
-def home():
+def root():
+
     return {
-        "message": "Welcome to My E-Commerce Website"
+        "message": "E-commerce API is running",
+        "status": "success"
     }
 
 
-# User Registration
-@app.post("/register")
-def register(user: UserCreate, db: Session = Depends(get_db)):
+# =========================================================
+# USER REGISTER
+# =========================================================
 
-    # Check whether email already exists
-    existing_user = db.query(models.User).filter(
+@app.post("/register")
+def register(
+    user: UserCreate,
+    db: Session = Depends(get_db)
+):
+
+    existing_user = db.query(
+        models.User
+    ).filter(
         models.User.email == user.email
     ).first()
 
     if existing_user:
+
         return {
             "message": "Email already registered"
         }
 
-    # Hash password
-    hashed_password = bcrypt.hashpw(
-        user.password.encode("utf-8"),
-        bcrypt.gensalt()
-    ).decode("utf-8")
-
-    # Create new user
     new_user = models.User(
         name=user.name,
         email=user.email,
-        password=hashed_password
+        password=user.password
     )
 
-    # Save user to database
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
     return {
         "message": "User registered successfully",
-        "user_id": new_user.id
+        "user_id": new_user.id,
+        "name": new_user.name,
+        "email": new_user.email
     }
 
 
-# User Login
+# =========================================================
+# LOGIN
+# =========================================================
+
 @app.post("/login")
-def login(user: UserLogin, db: Session = Depends(get_db)):
-
-    # Find user using email
-    existing_user = db.query(models.User).filter(
-        models.User.email == user.email
-    ).first()
-
-    # User doesn't exist
-    if not existing_user:
-        return {
-            "message": "Invalid email or password"
-        }
-
-    # Check password
-    password_correct = bcrypt.checkpw(
-        user.password.encode("utf-8"),
-        existing_user.password.encode("utf-8")
-    )
-
-    # Wrong password
-    if not password_correct:
-        return {
-            "message": "Invalid email or password"
-        }
-
-    # Successful login
-    return {
-        "message": "Login successful",
-        "user_id": existing_user.id,
-        "name": existing_user.name
-    }
-# Add Product
-@app.post("/products")
-def add_product(
-    product: ProductCreate,
+def login(
+    login_data: LoginRequest,
     db: Session = Depends(get_db)
 ):
-    new_product = product_models.Product(
-        name=product.name,
-        description=product.description,
-        price=product.price,
-        stock=product.stock,
-        category=product.category
-    )
 
-    db.add(new_product)
-    db.commit()
-    db.refresh(new_product)
+    user = db.query(
+        models.User
+    ).filter(
+        models.User.email == login_data.email,
+        models.User.password == login_data.password
+    ).first()
+
+    if not user:
+
+        return {
+            "message": "Invalid email or password"
+        }
 
     return {
-        "message": "Product added successfully",
-        "product_id": new_product.id
+        "message": "Login successful",
+        "user_id": user.id,
+        "name": user.name,
+        "email": user.email
     }
-# Get All Products
-@app.get("/products")
-def get_products(db: Session = Depends(get_db)):
 
-    products = db.query(product_models.Product).all()
+
+# =========================================================
+# GET ALL PRODUCTS
+# =========================================================
+
+@app.get("/products")
+def get_products(
+    db: Session = Depends(get_db)
+):
+
+    products = db.query(
+        product_models.Product
+    ).all()
 
     return products
-# Get One Product
-@app.get("/products/{product_id}")
-def get_product(product_id: int, db: Session = Depends(get_db)):
 
-    product = db.query(product_models.Product).filter(
+
+# =========================================================
+# GET SINGLE PRODUCT
+# =========================================================
+
+@app.get("/products/{product_id}")
+def get_product(
+    product_id: int,
+    db: Session = Depends(get_db)
+):
+
+    product = db.query(
+        product_models.Product
+    ).filter(
         product_models.Product.id == product_id
     ).first()
 
     if not product:
+
         return {
             "message": "Product not found"
         }
 
     return product
-# Update Product
-@app.put("/products/{product_id}")
-def update_product(
-    product_id: int,
-    product: ProductUpdate,
+
+
+# =========================================================
+# ADMIN - ADD PRODUCT
+# =========================================================
+
+@app.post("/products")
+def add_product(
+    product: ProductCreate,
     db: Session = Depends(get_db)
 ):
 
-    existing_product = db.query(product_models.Product).filter(
+    new_product = product_models.Product(
+
+        name=product.name,
+
+        description=product.description,
+
+        price=product.price,
+
+        stock=product.stock,
+
+        category=product.category
+    )
+
+    db.add(new_product)
+
+    db.commit()
+
+    db.refresh(new_product)
+
+    return new_product
+
+
+# =========================================================
+# ADMIN - UPDATE PRODUCT
+# =========================================================
+
+@app.put("/products/{product_id}")
+def update_product(
+    product_id: int,
+    product: ProductCreate,
+    db: Session = Depends(get_db)
+):
+
+    existing_product = db.query(
+        product_models.Product
+    ).filter(
         product_models.Product.id == product_id
     ).first()
 
     if not existing_product:
+
         return {
             "message": "Product not found"
         }
 
     existing_product.name = product.name
+
     existing_product.description = product.description
+
     existing_product.price = product.price
+
     existing_product.stock = product.stock
+
     existing_product.category = product.category
 
     db.commit()
+
     db.refresh(existing_product)
 
-    return {
-        "message": "Product updated successfully",
-        "product": existing_product
-    }
-# Delete Product
+    return existing_product
+
+
+# =========================================================
+# ADMIN - DELETE PRODUCT
+# =========================================================
+
 @app.delete("/products/{product_id}")
 def delete_product(
     product_id: int,
     db: Session = Depends(get_db)
 ):
 
-    existing_product = db.query(product_models.Product).filter(
+    product = db.query(
+        product_models.Product
+    ).filter(
         product_models.Product.id == product_id
     ).first()
 
-    if not existing_product:
+    if not product:
+
         return {
             "message": "Product not found"
         }
 
-    db.delete(existing_product)
+    db.delete(product)
+
     db.commit()
 
     return {
         "message": "Product deleted successfully"
     }
-# Add Product to Cart
+
+
+# =========================================================
+# ADD PRODUCT TO CART
+# =========================================================
+
 @app.post("/cart")
 def add_to_cart(
-    cart_item: CartItemCreate,
+    cart: CartCreate,
     db: Session = Depends(get_db)
 ):
 
-    # Check if product exists
-    product = db.query(product_models.Product).filter(
-        product_models.Product.id == cart_item.product_id
+    # -----------------------------------------------------
+    # CHECK PRODUCT
+    # -----------------------------------------------------
+
+    product = db.query(
+        product_models.Product
+    ).filter(
+        product_models.Product.id == cart.product_id
     ).first()
 
     if not product:
+
         return {
             "message": "Product not found"
         }
 
-    # Check if enough stock is available
-    if cart_item.quantity > product.stock:
+
+    # -----------------------------------------------------
+    # CHECK QUANTITY
+    # -----------------------------------------------------
+
+    if cart.quantity <= 0:
+
         return {
-            "message": "Not enough stock available"
+            "message": "Quantity must be greater than 0"
         }
 
-    # Check if this product is already in the user's cart
-    existing_item = db.query(cart_models.CartItem).filter(
-        cart_models.CartItem.user_id == cart_item.user_id,
-        cart_models.CartItem.product_id == cart_item.product_id
+
+    # -----------------------------------------------------
+    # CHECK STOCK
+    # -----------------------------------------------------
+
+    if product.stock < cart.quantity:
+
+        return {
+            "message": f"Only {product.stock} items available"
+        }
+
+
+    # -----------------------------------------------------
+    # CHECK EXISTING CART ITEM
+    # -----------------------------------------------------
+
+    existing_item = db.query(
+        cart_models.Cart
+    ).filter(
+        cart_models.Cart.user_id == cart.user_id,
+        cart_models.Cart.product_id == cart.product_id
     ).first()
+
+
+    # -----------------------------------------------------
+    # UPDATE EXISTING ITEM
+    # -----------------------------------------------------
 
     if existing_item:
 
-        existing_item.quantity += cart_item.quantity
+        new_quantity = (
+            existing_item.quantity +
+            cart.quantity
+        )
 
-        db.commit()
-        db.refresh(existing_item)
+        if new_quantity > product.stock:
 
-        return {
-            "message": "Cart quantity updated",
-            "cart_id": existing_item.id,
-            "quantity": existing_item.quantity
-        }
+            return {
+                "message":
+                f"Only {product.stock} items available"
+            }
 
-    # Create a new cart item
-    new_cart_item = cart_models.CartItem(
-        user_id=cart_item.user_id,
-        product_id=cart_item.product_id,
-        quantity=cart_item.quantity
-    )
+        existing_item.quantity = new_quantity
 
-    db.add(new_cart_item)
+
+    # -----------------------------------------------------
+    # ADD NEW ITEM
+    # -----------------------------------------------------
+
+    else:
+
+        new_cart = cart_models.Cart(
+
+            user_id=cart.user_id,
+
+            product_id=cart.product_id,
+
+            quantity=cart.quantity
+        )
+
+        db.add(new_cart)
+
+
     db.commit()
-    db.refresh(new_cart_item)
 
     return {
-        "message": "Product added to cart",
-        "cart_id": new_cart_item.id
+        "message": "Product added to cart"
     }
-# View User Cart
+
+
+# =========================================================
+# GET USER CART
+# =========================================================
+
 @app.get("/cart/{user_id}")
 def get_cart(
     user_id: int,
     db: Session = Depends(get_db)
 ):
 
-    cart_items = db.query(cart_models.CartItem).filter(
-        cart_models.CartItem.user_id == user_id
+    cart_items = db.query(
+        cart_models.Cart
+    ).filter(
+        cart_models.Cart.user_id == user_id
     ).all()
 
-    return cart_items
-# Update Cart Quantity
+
+    result = []
+
+
+    # -----------------------------------------------------
+    # ADD PRODUCT DETAILS TO CART RESPONSE
+    # -----------------------------------------------------
+
+    for item in cart_items:
+
+        product = db.query(
+            product_models.Product
+        ).filter(
+            product_models.Product.id == item.product_id
+        ).first()
+
+
+        if product:
+
+            result.append({
+
+                "id": item.id,
+
+                "user_id": item.user_id,
+
+                "product_id": item.product_id,
+
+                "product_name": product.name,
+
+                "description": product.description,
+
+                "price": product.price,
+
+                "category": product.category,
+
+                "stock": product.stock,
+
+                "quantity": item.quantity,
+
+                "subtotal":
+                    product.price * item.quantity
+            })
+
+
+    return result
+
+
+# =========================================================
+# UPDATE CART QUANTITY
+# =========================================================
+
 @app.put("/cart/{cart_id}")
-def update_cart(
+def update_cart_quantity(
     cart_id: int,
-    cart_update: CartUpdate,
+    cart_data: CartUpdate,
     db: Session = Depends(get_db)
 ):
 
-    cart_item = db.query(cart_models.CartItem).filter(
-        cart_models.CartItem.id == cart_id
+    cart_item = db.query(
+        cart_models.Cart
+    ).filter(
+        cart_models.Cart.id == cart_id
     ).first()
 
+
     if not cart_item:
+
         return {
             "message": "Cart item not found"
         }
 
-    if cart_update.quantity <= 0:
+
+    if cart_data.quantity <= 0:
+
         return {
             "message": "Quantity must be greater than 0"
         }
 
-    cart_item.quantity = cart_update.quantity
+
+    # -----------------------------------------------------
+    # CHECK PRODUCT STOCK
+    # -----------------------------------------------------
+
+    product = db.query(
+        product_models.Product
+    ).filter(
+        product_models.Product.id ==
+        cart_item.product_id
+    ).first()
+
+
+    if not product:
+
+        return {
+            "message": "Product not found"
+        }
+
+
+    if cart_data.quantity > product.stock:
+
+        return {
+            "message":
+            f"Only {product.stock} items available"
+        }
+
+
+    cart_item.quantity = cart_data.quantity
 
     db.commit()
+
     db.refresh(cart_item)
 
-    return {
-        "message": "Cart quantity updated successfully",
-        "cart_id": cart_item.id,
-        "quantity": cart_item.quantity
 
+    return {
+        "message": "Cart quantity updated",
+
+        "cart_id": cart_item.id,
+
+        "quantity": cart_item.quantity
     }
-# Remove Item from Cart
+
+
+# =========================================================
+# REMOVE PRODUCT FROM CART
+# =========================================================
+
 @app.delete("/cart/{cart_id}")
 def remove_from_cart(
     cart_id: int,
     db: Session = Depends(get_db)
 ):
 
-    cart_item = db.query(cart_models.CartItem).filter(
-        cart_models.CartItem.id == cart_id
+    cart_item = db.query(
+        cart_models.Cart
+    ).filter(
+        cart_models.Cart.id == cart_id
     ).first()
 
+
     if not cart_item:
+
         return {
             "message": "Cart item not found"
         }
 
+
     db.delete(cart_item)
+
     db.commit()
 
+
     return {
-        "message": "Product removed from cart successfully"
+        "message": "Product removed from cart"
     }
-# Place Order
+
+
+# =========================================================
+# PLACE ORDER
+# =========================================================
+
 @app.post("/orders/{user_id}")
 def place_order(
     user_id: int,
     db: Session = Depends(get_db)
 ):
 
-    # Get user's cart
-    cart_items = db.query(cart_models.CartItem).filter(
-        cart_models.CartItem.user_id == user_id
+    # -----------------------------------------------------
+    # GET CART
+    # -----------------------------------------------------
+
+    cart_items = db.query(
+        cart_models.Cart
+    ).filter(
+        cart_models.Cart.user_id == user_id
     ).all()
 
-    # Check if cart is empty
+
     if not cart_items:
+
         return {
             "message": "Cart is empty"
         }
 
+
     total_amount = 0
 
-    # Calculate total
+
+    # -----------------------------------------------------
+    # CHECK STOCK + CALCULATE TOTAL
+    # -----------------------------------------------------
+
+    products_data = []
+
+
     for cart_item in cart_items:
 
-        product = db.query(product_models.Product).filter(
-            product_models.Product.id == cart_item.product_id
+        product = db.query(
+            product_models.Product
+        ).filter(
+            product_models.Product.id ==
+            cart_item.product_id
         ).first()
 
+
         if not product:
+
             return {
-                "message": "Product not found"
+                "message":
+                f"Product {cart_item.product_id} not found"
             }
+
 
         if cart_item.quantity > product.stock:
+
             return {
-                "message": f"Not enough stock for {product.name}"
+                "message":
+                f"Not enough stock for {product.name}"
             }
 
-        total_amount += product.price * cart_item.quantity
 
-    # Create order
+        subtotal = (
+            product.price *
+            cart_item.quantity
+        )
+
+        total_amount += subtotal
+
+
+        products_data.append({
+
+            "product": product,
+
+            "quantity": cart_item.quantity,
+
+            "price": product.price
+        })
+
+
+    # -----------------------------------------------------
+    # CREATE ORDER
+    # -----------------------------------------------------
+
     new_order = order_models.Order(
+
         user_id=user_id,
+
         total_amount=total_amount,
+
         status="Placed"
     )
 
+
     db.add(new_order)
+
     db.commit()
+
     db.refresh(new_order)
 
-    # Create order items
-    for cart_item in cart_items:
 
-        product = db.query(product_models.Product).filter(
-            product_models.Product.id == cart_item.product_id
-        ).first()
+    # -----------------------------------------------------
+    # CREATE ORDER ITEMS
+    # -----------------------------------------------------
 
-        new_order_item = order_models.OrderItem(
+    for item in products_data:
+
+        product = item["product"]
+
+        quantity = item["quantity"]
+
+        price = item["price"]
+
+
+        order_item = order_models.OrderItem(
+
             order_id=new_order.id,
+
             product_id=product.id,
-            quantity=cart_item.quantity,
-            price=product.price
+
+            quantity=quantity,
+
+            price=price
         )
 
-        db.add(new_order_item)
 
-        # Reduce product stock
-        product.stock -= cart_item.quantity
+        db.add(order_item)
 
-    # Remove cart items
+
+        # -------------------------------------------------
+        # REDUCE PRODUCT STOCK
+        # -------------------------------------------------
+
+        product.stock -= quantity
+
+
+    # -----------------------------------------------------
+    # CLEAR CART
+    # -----------------------------------------------------
+
     for cart_item in cart_items:
+
         db.delete(cart_item)
+
 
     db.commit()
 
+
     return {
-        "message": "Order placed successfully",
-        "order_id": new_order.id,
-        "total_amount": total_amount,
-        "status": "Placed"
+
+        "message":
+        "Order placed successfully",
+
+        "order_id":
+        new_order.id,
+
+        "user_id":
+        new_order.user_id,
+
+        "total_amount":
+        new_order.total_amount,
+
+        "status":
+        new_order.status
     }
-# Get User Orders
+
+
+# =========================================================
+# GET USER ORDERS
+# =========================================================
+
 @app.get("/orders/{user_id}")
 def get_orders(
     user_id: int,
     db: Session = Depends(get_db)
 ):
 
-    orders = db.query(order_models.Order).filter(
+    orders = db.query(
+        order_models.Order
+    ).filter(
         order_models.Order.user_id == user_id
     ).all()
 
+
     return orders
-# Get Order Details
+
+
+# =========================================================
+# GET ORDER DETAILS
+# =========================================================
+
 @app.get("/order-details/{order_id}")
 def get_order_details(
     order_id: int,
     db: Session = Depends(get_db)
 ):
 
-    # Find the order
-    order = db.query(order_models.Order).filter(
+    order = db.query(
+        order_models.Order
+    ).filter(
         order_models.Order.id == order_id
     ).first()
 
+
     if not order:
+
         return {
             "message": "Order not found"
         }
 
-    # Find items belonging to this order
-    order_items = db.query(order_models.OrderItem).filter(
-        order_models.OrderItem.order_id == order_id
+
+    order_items = db.query(
+        order_models.OrderItem
+    ).filter(
+        order_models.OrderItem.order_id ==
+        order_id
     ).all()
+
 
     items = []
 
+
     for item in order_items:
 
-        product = db.query(product_models.Product).filter(
-            product_models.Product.id == item.product_id
+        product = db.query(
+            product_models.Product
+        ).filter(
+            product_models.Product.id ==
+            item.product_id
         ).first()
 
-        items.append({
-            "product_id": item.product_id,
-            "product_name": product.name if product else "Unknown Product",
-            "quantity": item.quantity,
-            "price": item.price,
-            "subtotal": item.price * item.quantity
-        })
+
+        if product:
+
+            items.append({
+
+                "product_id":
+                    product.id,
+
+                "product_name":
+                    product.name,
+
+                "quantity":
+                    item.quantity,
+
+                "price":
+                    item.price,
+
+                "subtotal":
+                    item.price *
+                    item.quantity
+            })
+
 
     return {
-        "order_id": order.id,
-        "user_id": order.user_id,
-        "total_amount": order.total_amount,
-        "status": order.status,
-        "items": items
+
+        "order_id":
+            order.id,
+
+        "user_id":
+            order.user_id,
+
+        "total_amount":
+            order.total_amount,
+
+        "status":
+            order.status,
+
+        "items":
+            items
+    }
+
+
+# =========================================================
+# ADMIN - GET ALL ORDERS
+# =========================================================
+
+@app.get("/admin/orders")
+def get_all_orders(
+    db: Session = Depends(get_db)
+):
+
+    orders = db.query(
+        order_models.Order
+    ).all()
+
+
+    return orders
+
+
+# =========================================================
+# ADMIN - UPDATE ORDER STATUS
+# =========================================================
+
+@app.put("/admin/orders/{order_id}/status")
+def update_order_status(
+    order_id: int,
+    status_data: OrderStatusUpdate,
+    db: Session = Depends(get_db)
+):
+
+    order = db.query(
+        order_models.Order
+    ).filter(
+        order_models.Order.id == order_id
+    ).first()
+
+
+    if not order:
+
+        return {
+            "message": "Order not found"
+        }
+
+
+    new_status = status_data.status.strip()
+
+
+    # -----------------------------------------------------
+    # ALLOWED STATUS VALUES
+    # -----------------------------------------------------
+
+    allowed_statuses = [
+
+        "Placed",
+
+        "Processing",
+
+        "Shipped",
+
+        "Delivered",
+
+        "Cancelled"
+    ]
+
+
+    # -----------------------------------------------------
+    # CASE-INSENSITIVE CHECK
+    # -----------------------------------------------------
+
+    matched_status = None
+
+
+    for status in allowed_statuses:
+
+        if new_status.lower() == status.lower():
+
+            matched_status = status
+
+            break
+
+
+    if matched_status is None:
+
+        return {
+
+            "message":
+            "Invalid order status",
+
+            "allowed_statuses":
+                allowed_statuses
+        }
+
+
+    # -----------------------------------------------------
+    # UPDATE
+    # -----------------------------------------------------
+
+    order.status = matched_status
+
+
+    db.commit()
+
+    db.refresh(order)
+
+
+    return {
+
+        "message":
+        "Order status updated successfully",
+
+        "order_id":
+        order.id,
+
+        "status":
+        order.status
+    }
+
+
+# =========================================================
+# ADMIN - GET ALL USERS
+# =========================================================
+
+@app.get("/admin/users")
+def get_all_users(
+    db: Session = Depends(get_db)
+):
+
+    users = db.query(
+        models.User
+    ).all()
+
+
+    return users
+
+
+# =========================================================
+# ADMIN - DASHBOARD SUMMARY
+# =========================================================
+
+@app.get("/admin/dashboard")
+def admin_dashboard(
+    db: Session = Depends(get_db)
+):
+
+    total_products = db.query(
+        product_models.Product
+    ).count()
+
+
+    total_users = db.query(
+        models.User
+    ).count()
+
+
+    total_orders = db.query(
+        order_models.Order
+    ).count()
+
+
+    orders = db.query(
+        order_models.Order
+    ).all()
+
+
+    total_sales = sum(
+        order.total_amount
+        for order in orders
+    )
+
+
+    return {
+
+        "total_products":
+            total_products,
+
+        "total_users":
+            total_users,
+
+        "total_orders":
+            total_orders,
+
+        "total_sales":
+            total_sales
     }
